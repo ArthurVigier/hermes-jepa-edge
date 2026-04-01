@@ -23,7 +23,6 @@ import yaml
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from src.adapters.lewm_loader import load_lewm_encoder
 from src.pipeline.hermes_vla import (
     HermesVLAConfig,
     build_hermes_vla,
@@ -36,6 +35,8 @@ from src.utils import (
     get_logger,
     seed_everything,
 )
+from src.visual_encoders import LeWMProjectionSource, build_visual_source
+from src.visual_encoders.factory import visual_source_trainable_parameters
 
 
 def build_robot_dataloader(config: HermesVLAConfig, tokenizer):
@@ -43,6 +44,7 @@ def build_robot_dataloader(config: HermesVLAConfig, tokenizer):
     Build dataloader for Phase 2 training.
     Each batch contains:
       - frames: [B, C, H, W] robot observation
+      - vjepa2_embeddings: [B, vjepa2_dim] current embedding for direct V-JEPA2 mode
       - vjepa2_targets: [B, vjepa2_dim] target latent (from LeWM projection or V-JEPA2)
       - input_ids / attention_mask / labels: tokenized instruction + action sequence
     Replace the stub Dataset with your actual LIBERO / Droid loader.
@@ -62,6 +64,7 @@ def build_robot_dataloader(config: HermesVLAConfig, tokenizer):
         def __getitem__(self, idx: int) -> dict:
             # --- stub: replace with real LIBERO/Droid loading ---
             frames = torch.randn(3, 224, 224)
+            vjepa2_embeddings = torch.randn(self.cfg.vjepa2_dim)
             vjepa2_targets = torch.randn(self.cfg.vjepa2_dim)
 
             # Tokenize a dummy instruction
@@ -85,6 +88,7 @@ def build_robot_dataloader(config: HermesVLAConfig, tokenizer):
 
             return {
                 "frames": frames,
+                "vjepa2_embeddings": vjepa2_embeddings,
                 "vjepa2_targets": vjepa2_targets,
                 "input_ids": input_ids,
                 "attention_mask": attention_mask,
@@ -96,7 +100,7 @@ def build_robot_dataloader(config: HermesVLAConfig, tokenizer):
         ds,
         batch_size=config.batch_size,
         shuffle=True,
-        num_workers=4,
+        num_workers=0,
         pin_memory=True,
     )
 
@@ -149,19 +153,19 @@ def main() -> None:
     # ── Dataloader ───────────────────────────────────────────────────────────
     dataloader = build_robot_dataloader(config, tokenizer)
 
-    # ── Load LeWM encoder + projection ───────────────────────────────────────
-    logger.info(f"Loading LeWM from {config.lewm_checkpoint}")
-    lewm_encoder = load_lewm_encoder(config.lewm_checkpoint, device=str(device))
-
-    from src.adapters.projection import build_projection_from_state_dict
-    proj_state = torch.load(config.projection_checkpoint, map_location="cpu", weights_only=True)
-    projection = build_projection_from_state_dict(proj_state["projection_state"]).to(device)
+    # ── Visual encoder source ────────────────────────────────────────────────
+    visual_source = build_visual_source(config, device=str(device), logger=logger)
+    projection_state = (
+        visual_source.projection.state_dict()
+        if isinstance(visual_source, LeWMProjectionSource)
+        else None
+    )
 
     # ── Optimizer: only LoRA adapters + predictor + projection ───────────────
     trainable_params = (
         list(p for p in hermes.parameters() if p.requires_grad)   # LoRA adapters only
         + list(predictor.parameters())
-        + list(projection.parameters())
+        + list(visual_source_trainable_parameters(visual_source))
     )
     n_trainable = sum(p.numel() for p in trainable_params)
     n_total = sum(p.numel() for p in hermes.parameters()) + n_trainable
@@ -186,7 +190,7 @@ def main() -> None:
 
     hermes.train()
     predictor.train()
-    projection.train()
+    visual_source.train()
 
     data_iter = iter(dataloader)
     kill_triggered = False
@@ -205,10 +209,8 @@ def main() -> None:
         labels = batch["labels"].to(device)
 
         with StepTimer(step, log_every=config.log_every, logger=logger):
-            # 1. LeWM encode + project
-            with torch.no_grad():
-                lewm_emb = lewm_encoder(frames)           # [B, lewm_dim]
-            projected = projection(lewm_emb)               # [B, vjepa2_dim]
+            # 1. Current visual embedding
+            projected = visual_source(batch=batch, frames=frames)  # [B, vjepa2_dim]
 
             # 2. Forward through Hermes (NTP logits + hidden states)
             outputs = hermes(
@@ -259,7 +261,7 @@ def main() -> None:
             torch.save({
                 "step": step,
                 "predictor_state": predictor.state_dict(),
-                "projection_state": projection.state_dict(),
+                "projection_state": projection_state,
                 "config": config,
                 "metrics": metrics,
             }, ckpt_path)
@@ -288,7 +290,7 @@ def main() -> None:
     torch.save({
         "step": n_steps,
         "predictor_state": predictor.state_dict(),
-        "projection_state": projection.state_dict(),
+        "projection_state": projection_state,
         "config": config,
     }, output_dir / "checkpoint_final.pt")
 

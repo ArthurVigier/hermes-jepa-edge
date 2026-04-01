@@ -34,6 +34,8 @@ class EdgeExportConfig:
     lewm_checkpoint: str
     projection_checkpoint: str
     student_checkpoint: str               # Phase 2b output (Hermes-3-8B fine-tuned)
+    visual_encoder_type: str = "lewm_projection"  # lewm_projection | vjepa2_direct
+    vjepa2_embeddings_key: str = "vjepa2_embeddings"
 
     # Export paths
     output_dir: str = "experiments/phase3_edge"

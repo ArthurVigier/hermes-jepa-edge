@@ -18,7 +18,6 @@ import yaml
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from src.adapters.lewm_loader import load_lewm_encoder
 from src.edge.tensorrt_export import (
     EdgeExportConfig,
     benchmark_trt_latency,
@@ -28,6 +27,7 @@ from src.edge.tensorrt_export import (
     validate_onnx,
 )
 from src.utils import get_logger
+from src.visual_encoders.factory import LeWMProjectionSource, build_visual_source
 
 
 def main() -> None:
@@ -47,18 +47,21 @@ def main() -> None:
     # ── Load models ──────────────────────────────────────────────────────────
     if not args.skip_onnx and not args.bench_only:
         logger.info("Loading LeWM encoder + projection for ONNX export")
-
-        lewm_encoder = load_lewm_encoder(config.lewm_checkpoint, device="cpu")
-
-        proj_state = torch.load(config.projection_checkpoint, map_location="cpu", weights_only=True)
-
-        from src.adapters.projection import build_projection_from_state_dict
-        projection = build_projection_from_state_dict(proj_state["projection_state"])
-        projection.eval()
+        visual_source = build_visual_source(config, device="cpu", logger=logger)
+        visual_source.eval()
+        if not isinstance(visual_source, LeWMProjectionSource):
+            logger.error(
+                "TensorRT export is only supported for visual_encoder_type='lewm_projection'. "
+                "Direct V-JEPA2 mode expects external embeddings and has no local image encoder to export."
+            )
+            sys.exit(1)
 
         # ── ONNX export ───────────────────────────────────────────────────
         onnx_path = export_lewm_projection_to_onnx(
-            lewm_encoder, projection, config, logger=logger
+            visual_source.encoder,
+            visual_source.projection,
+            config,
+            logger=logger,
         )
 
         # ── Validate ONNX ─────────────────────────────────────────────────

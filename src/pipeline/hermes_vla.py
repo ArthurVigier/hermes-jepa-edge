@@ -128,6 +128,8 @@ class HermesVLAConfig:
     # Backbone: Hermes-4.3-36B — requires A100 80GB for QLoRA training (~25GB VRAM)
     # NOT suitable for RTX 4090 (too tight). Use RunPod A100 80GB.
     hermes_model_id: str = "NousResearch/Hermes-4.3-36B"
+    visual_encoder_type: str = "lewm_projection"  # lewm_projection | vjepa2_direct
+    vjepa2_embeddings_key: str = "vjepa2_embeddings"
     lewm_checkpoint: str = ""
     projection_checkpoint: str = ""       # Phase 1 output
     output_dir: str = "experiments/phase2"

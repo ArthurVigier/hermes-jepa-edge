@@ -1,0 +1,44 @@
+# Phase 2: Hermes-4.3-36B QLoRA backbone with direct V-JEPA2 embeddings
+#
+# This mode skips the LeWM encoder and projection layer entirely.
+# Your dataloader must provide:
+#   - vjepa2_embeddings: current-frame embeddings in V-JEPA2 space
+#   - vjepa2_targets: future-state target embeddings in V-JEPA2 space
+
+hermes_model_id: "NousResearch/Hermes-4.3-36B"
+visual_encoder_type: "vjepa2_direct"
+vjepa2_embeddings_key: "vjepa2_embeddings"
+lewm_checkpoint: ""
+projection_checkpoint: ""
+output_dir: "experiments/phase2_vjepa2_direct"
+
+# QLoRA settings
+use_qlora: true
+qlora_bits: 4
+qlora_r: 16
+qlora_alpha: 32
+qlora_dropout: 0.05
+qlora_target_modules: null
+
+# VLA-JEPA predictor
+predictor_init_layers: [8, 16]
+lewm_dim: 1024
+vjepa2_dim: 1024
+
+# Dual loss
+lambda_ntp: 1.0
+lambda_jepa: 0.5
+jepa_loss_dropout: 0.1
+
+# Training
+batch_size: 4
+lr: 0.0002
+weight_decay: 0.0001
+n_steps: 5000
+kill_check_step: 2000
+log_every: 50
+save_every: 500
+gradient_checkpointing: true
+device: "cuda"
+seed: 42
+available_vram_gb: 80.0
