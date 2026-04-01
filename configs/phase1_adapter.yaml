@@ -1,0 +1,20 @@
+# configs/phase1_adapter.yaml
+lewm_checkpoint: "path/to/lewm.pt"
+output_dir: "experiments/phase1"
+
+lewm_dim: 256
+vjepa2_dim: 1024
+hidden_dim: 512
+dropout: 0.1
+
+batch_size: 16
+lr: 0.0002
+weight_decay: 0.0001
+n_steps_frozen: 500
+n_steps_joint: 1000
+kill_check_step: 500
+log_every: 25
+save_every: 250
+device: "cuda"
+seed: 42
+available_vram_gb: 24.0

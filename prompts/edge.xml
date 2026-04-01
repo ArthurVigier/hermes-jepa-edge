@@ -1,0 +1,14 @@
+<edge>
+  <target>Jetson Orin Nano: SM_87, 8GB unified, 40 TOPS, TensorRT 8.x</target>
+  <memory_budget>
+    Hermes-3-8B Q4_K_M: ~4.9GB | LeWM+proj TRT: ~0.3GB | KV cache: ~0.5GB | OS: ~1.0GB | TOTAL: ~6.7GB
+  </memory_budget>
+  <rules>
+    <rule>Static shapes only — no dynamic axes for TensorRT compatibility</rule>
+    <rule>ONNX export path must be written at design time, never retrofitted</rule>
+    <rule>Profile with torch.profiler before TensorRT export to find bottlenecks</rule>
+    <rule>Selective decoding: trigger LLM only when JEPA semantic variance exceeds threshold (~3x speedup)</rule>
+    <rule>FP16 for LeWM/projection, Q4_K_M GGUF for Hermes via llama.cpp</rule>
+  </rules>
+  <latency_target>LeWM+proj &lt; 50ms | Full step (incl. LLM) &lt; 200ms</latency_target>
+</edge>

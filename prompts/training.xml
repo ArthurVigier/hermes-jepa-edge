@@ -1,0 +1,51 @@
+<training>
+  <backbone_decision>
+    <!-- WHY Hermes-4.3-36B, not 8B or 14B -->
+    <!-- 36B has significantly better physical reasoning + tool-call accuracy -->
+    <!-- QLoRA keeps VRAM at ~25GB → A100 80GB (RunPod ~$1.5/h) -->
+    <!-- LoRA adapter (~100-500MB) distilled into Hermes-3-8B for edge -->
+    <!-- 36B never runs on Jetson — it is the teacher, not the deployed model -->
+    <phase name="2_training"  model="Hermes-4.3-36B"  method="QLoRA NF4"  hardware="A100 80GB RunPod"/>
+    <phase name="2b_distill"  model="Hermes-3-8B"      method="QLoRA"      hardware="RTX 4090 Vast.ai"/>
+    <phase name="3_edge"      model="Hermes-3-8B"      method="Q4_K_M GGUF" hardware="Jetson Orin Nano"/>
+  </backbone_decision>
+
+  <vram_budgets>
+    <budget phase="2" model="Hermes-4.3-36B QLoRA" breakdown="NF4 weights ~18GB + LoRA ~1GB + optimizer ~2GB + activations ~4GB + LeWM ~1GB" total="~26GB" gpu="A100 80GB"/>
+    <budget phase="2b_student" model="Hermes-3-8B QLoRA" total="~6GB" gpu="RTX 4090 24GB (very comfortable)"/>
+    <budget phase="3_edge" model="Hermes-3-8B Q4_K_M + LeWM TRT + KV + OS" total="~6.7GB" gpu="Jetson 8GB unified"/>
+  </vram_budgets>
+
+  <rules>
+    <rule>Always estimate VRAM before writing any training loop: params + grads + optimizer + activations</rule>
+    <rule>Always seed: torch + numpy + random for reproducibility</rule>
+    <rule>Always validate tensor shapes at module boundaries</rule>
+    <rule>Kill criterion checks must be explicit callbacks, not manual inspection</rule>
+    <rule>Dual loss (NTP + JEPA): use jepa_loss_dropout to save FLOPs (default 0.1)</rule>
+    <rule>Leakage-free: student/predictor sees ONLY current observation, never future frames</rule>
+    <rule>QLoRA: freeze base model, only train LoRA adapters + predictor + projection</rule>
+    <rule>After Phase 2: always merge LoRA before distillation (phase2_merge_lora.py)</rule>
+    <rule>Always save checkpoint + resume mechanism before long runs</rule>
+  </rules>
+
+  <kill_criteria>
+    <phase0 metric="cosine_sim"    threshold="0.3"  direction="below" check_at="100 steps"/>
+    <phase1 metric="align_loss"    threshold="0.8"  direction="above" check_at="500 steps"/>
+    <phase2 metric="task_success"  threshold="0.30" direction="below" check_at="2000 steps"/>
+    <phase3 metric="latency_ms"    threshold="200"  direction="above"/>
+  </kill_criteria>
+
+  <qlora_defaults>
+    <!-- Tested defaults for Hermes-4.3-36B on A100 80GB -->
+    <param name="qlora_bits"        value="4"/>
+    <param name="qlora_r"           value="16"/>
+    <param name="qlora_alpha"       value="32"/>
+    <param name="qlora_dropout"     value="0.05"/>
+    <param name="quant_type"        value="nf4"/>
+    <param name="compute_dtype"     value="bfloat16"/>
+    <param name="double_quant"      value="true"/>
+    <param name="target_modules"    value="q_proj,k_proj,v_proj,o_proj,gate_proj,up_proj,down_proj"/>
+    <param name="lr"                value="2e-4"/>
+    <param name="batch_size"        value="4"/>
+  </qlora_defaults>
+</training>

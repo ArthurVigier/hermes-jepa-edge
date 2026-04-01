@@ -1,0 +1,36 @@
+<!-- robotics.xml -->
+<robotics>
+  <pipeline>
+    LeWM (15M) → projection (lewm_dim→vjepa2_dim)
+    → VLA-JEPA predictor (Hermes-4.3-36B layers 8-16)
+    → dual loss NTP + JEPA (QLoRA, A100 80GB)
+    → LoRA merge → distillation → Hermes-3-8B Q4_K_M
+    → tool calls → robot execution (Jetson Orin Nano)
+  </pipeline>
+
+  <model_roles>
+    <role model="Hermes-4.3-36B" stage="training_teacher" hardware="A100 80GB" method="QLoRA NF4 ~26GB"/>
+    <role model="Hermes-3-8B"    stage="edge_student"     hardware="Jetson 8GB" method="Q4_K_M GGUF ~4.9GB"/>
+  </model_roles>
+
+  <action_schema>
+    <tool name="move_arm"           args="target_pose:[x,y,z,rx,ry,rz], velocity:0.0-1.0"/>
+    <tool name="grasp"              args="force_n:float, width_m:float"/>
+    <tool name="release"            args="width_m:float"/>
+    <tool name="query_world_state"  args="modality:rgb|depth|proprioception"/>
+    <tool name="check_kill_criterion" args="phase:int, metric_name:str, metric_value:float"/>
+  </action_schema>
+
+  <hermes_tool_call_format>
+    <!-- Hermes-4.3-36B uses Llama-3 chat format (NOT ChatML) -->
+    Template header : &lt;|start_header_id|&gt;system&lt;|end_header_id|&gt;
+    Tool calls      : &lt;tool_call&gt;{...}&lt;/tool_call&gt;
+    Thinking mode   : enable_thinking=True injects &lt;think&gt; prefix
+    vLLM parser     : --tool-call-parser hermes --enable-auto-tool-choice
+    SGLang parser   : --tool-call-parser qwen25
+    Sampling        : temperature=0.6, top_p=0.95, top_k=20
+  </hermes_tool_call_format>
+
+  <datasets>LIBERO, BridgeV2, Droid (23k trajectories), lewm-habitat-merged</datasets>
+  <distillation_constraint>Student sees ONLY current observation — no future frame leakage (VLA-JEPA principle)</distillation_constraint>
+</robotics>

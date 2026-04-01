@@ -1,0 +1,43 @@
+# configs/phase2b_distill.yaml
+# Phase 2b: Distillation Hermes-4.3-36B (fine-tuned) → Hermes-3-8B (edge student)
+#
+# TEACHER: Hermes-4.3-36B + LoRA adapters merged (output of Phase 2)
+#   - Runs on A100 80GB for trajectory generation (offline, one-time cost)
+#   - Generates annotated robot trajectories with <think> reasoning traces
+#
+# STUDENT: Hermes-3-8B
+#   - Trains on RTX 4090 24GB (~6GB QLoRA VRAM, very comfortable)
+#   - Final target for edge deployment (Q4_K_M GGUF → 4.9GB on Jetson)
+#
+# HARDWARE split:
+#   Teacher generation: RunPod A100 80GB (~$1.5/h, ~10h) = ~$15
+#   Student training:   Vast.ai RTX 4090  (~$0.4/h, ~30h) = ~$12
+#   Total Phase 2b:     ~$27
+
+teacher_model_id: "NousResearch/Hermes-4.3-36B"
+teacher_lora_checkpoint: "experiments/phase2/checkpoint_best.pt"  # LoRA adapter from Phase 2
+student_model_id: "NousResearch/Hermes-3-Llama-3.1-8B"
+student_checkpoint: ""           # Optional: start from Phase 2 student if exists
+output_dir: "experiments/phase2b"
+
+teacher_trajectories_path: "data/teacher_trajectories.jsonl"
+n_trajectories: 500
+
+# Student QLoRA config (RTX 4090, very comfortable)
+use_qlora: true
+qlora_bits: 4
+qlora_r: 16
+qlora_alpha: 32
+
+batch_size: 8
+lr: 0.00002
+weight_decay: 0.0001
+n_epochs: 3
+max_seq_len: 1024
+temperature: 2.0
+alpha_ce: 0.5
+alpha_kd: 0.5
+gradient_checkpointing: true
+device: "cuda"
+seed: 42
+available_vram_gb: 24.0    # RTX 4090 — student training only

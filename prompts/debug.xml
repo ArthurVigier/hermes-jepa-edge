@@ -1,0 +1,18 @@
+<!-- debug.xml -->
+<debug>
+  <protocol>
+    <step>1. Reproduce with minimal example (smallest batch, CPU if possible)</step>
+    <step>2. Check tensor shapes at every module boundary</step>
+    <step>3. Check for NaN/Inf: torch.isnan(loss).any() before backward</step>
+    <step>4. Check gradient flow: named_parameters() with requires_grad + grad norms</step>
+    <step>5. Isolate: freeze everything, unfreeze one component at a time</step>
+    <step>6. Log: loss per component (NTP vs JEPA), not just total</step>
+  </protocol>
+  <common_failures>
+    <failure>Alignment loss stuck at ~1.0: projection not initialized properly, check Linear init</failure>
+    <failure>NTP loss diverging: learning rate too high for Hermes, try 1e-5</failure>
+    <failure>CUDA OOM: enable gradient_checkpointing, reduce batch_size, check for retained graphs</failure>
+    <failure>ONNX export fails: dynamic control flow in LeWM — trace instead of script</failure>
+    <failure>TRT engine crash on Jetson: SM mismatch — must build engine ON the Jetson</failure>
+  </common_failures>
+</debug>

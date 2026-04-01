@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+
+# Experiments & checkpoints
+experiments/
+data/*.jsonl
+data/*.pt
+data/*.h5
+
+# Model weights
+*.gguf
+*.onnx
+*.trt
+*.bin
+*.safetensors
+
+# Logs
+*.log
+wandb/
+runs/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store

@@ -1,0 +1,51 @@
+# configs/phase2_hermes.yaml
+# Phase 2: Hermes-4.3-36B QLoRA backbone training
+#
+# HARDWARE: A100 80GB (RunPod) — REQUIRED
+# Do NOT run on RTX 4090 (24GB): will OOM during training
+#
+# VRAM breakdown:
+#   NF4 weights:         ~18GB
+#   LoRA adapters:        ~1GB
+#   Optimizer states:     ~2GB
+#   Activations (bs=4):   ~4GB
+#   LeWM + projection:    ~1GB
+#   TOTAL:               ~26GB  (54GB headroom on A100 80GB)
+#
+# Estimated cost: ~$75-100 (50h × $1.5/h on RunPod A100)
+
+hermes_model_id: "NousResearch/Hermes-4.3-36B"
+lewm_checkpoint: "path/to/lewm.pt"
+projection_checkpoint: "experiments/phase1/checkpoint_best.pt"
+output_dir: "experiments/phase2"
+
+# QLoRA settings (required for 36B)
+use_qlora: true
+qlora_bits: 4
+qlora_r: 16
+qlora_alpha: 32
+qlora_dropout: 0.05
+qlora_target_modules: null   # null = auto-detect all linear layers
+
+# VLA-JEPA predictor
+predictor_init_layers: [8, 16]
+lewm_dim: 256
+vjepa2_dim: 1024
+
+# Dual loss
+lambda_ntp: 1.0
+lambda_jepa: 0.5
+jepa_loss_dropout: 0.1
+
+# Training — A100 80GB
+batch_size: 4
+lr: 0.0002           # Higher LR safe with QLoRA (adapters only)
+weight_decay: 0.0001
+n_steps: 5000
+kill_check_step: 2000
+log_every: 50
+save_every: 500
+gradient_checkpointing: true
+device: "cuda"
+seed: 42
+available_vram_gb: 80.0

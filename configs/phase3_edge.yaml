@@ -1,0 +1,26 @@
+# configs/phase3_edge.yaml
+lewm_checkpoint: "path/to/lewm.pt"
+projection_checkpoint: "experiments/phase1/checkpoint_best.pt"
+student_checkpoint: "experiments/phase2b/student_final"
+
+output_dir: "experiments/phase3_edge"
+onnx_path: "experiments/phase3_edge/lewm_projection.onnx"
+trt_engine_path: "experiments/phase3_edge/lewm_projection.trt"
+gguf_path: "experiments/phase3_edge/hermes3_8b_q4km.gguf"
+
+lewm_dim: 256
+vjepa2_dim: 1024
+input_channels: 3
+input_height: 224
+input_width: 224
+
+fp16: true
+int8: false
+workspace_gb: 4
+batch_size: 1
+
+latency_budget_ms: 50.0
+n_warmup: 10
+n_bench: 100
+
+device: "cuda"

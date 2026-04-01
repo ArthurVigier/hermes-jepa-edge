@@ -1,0 +1,17 @@
+<!-- research.xml -->
+<research>
+  <protocol>
+    <rule>Search arxiv + HuggingFace + GitHub before forming an opinion</rule>
+    <rule>Distinguish: pre-2026 (training cutoff) vs post-2026 (search required)</rule>
+    <rule>Always check if a paper has public code before planning a reimplementation</rule>
+    <rule>Cite: title + arxiv ID + date + code URL when available</rule>
+  </protocol>
+  <key_refs>
+    <ref id="vla-jepa">arXiv:2602.10098 — github.com/ginwind/VLA-JEPA — Feb 2026</ref>
+    <ref id="llm-jepa">arXiv:2509.14252 — github.com/rbalestr-lab/llm-jepa — Sep 2025</ref>
+    <ref id="vl-jepa">arXiv:2512.10942 — Meta FAIR — Dec 2025</ref>
+    <ref id="vjepa2">arXiv:2506.09985 — github.com/facebookresearch/vjepa2 — Jun 2025</ref>
+    <ref id="hermes43">HF: NousResearch/Hermes-4.3-36B — Dec 2025</ref>
+    <ref id="lewm">HF: Artvv/lewm-habitat-merged — Maes et al. 2026</ref>
+  </key_refs>
+</research>
