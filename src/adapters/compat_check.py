@@ -9,14 +9,14 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import Optional
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
+import torch.nn.functional as functional
 from torch.utils.data import DataLoader
 
+from src.adapters.lewm_loader import get_lewm_output_dim, load_lewm_encoder
 from src.utils import check_kill_criterion, get_logger, seed_everything
 
 
@@ -51,14 +51,7 @@ class LeWMWrapper(nn.Module):
     def __init__(self, checkpoint_path: str, device: str = "cuda") -> None:
         super().__init__()
         self.device = device
-        state = torch.load(checkpoint_path, map_location=device, weights_only=True)
-        # LeWM stores encoder under 'encoder' key — adjust if different
-        self.encoder = state.get("encoder", state)
-        if isinstance(self.encoder, dict):
-            raise ValueError(
-                "LeWM checkpoint should contain a nn.Module under 'encoder' key. "
-                "Got a raw state_dict. Build the model first, then load weights."
-            )
+        self.encoder = load_lewm_encoder(checkpoint_path, device=device)
         self.encoder.eval()
 
     @torch.no_grad()
@@ -92,8 +85,8 @@ def compute_cosine_similarity_batch(
         lewm_embeddings = projection(lewm_embeddings)
 
     # Normalize both sides
-    lewm_norm = F.normalize(lewm_embeddings, dim=-1)
-    target_norm = F.normalize(vjepa2_targets, dim=-1)
+    lewm_norm = functional.normalize(lewm_embeddings, dim=-1)
+    target_norm = functional.normalize(vjepa2_targets, dim=-1)
 
     cos_sim = (lewm_norm * target_norm).sum(dim=-1)  # [B]
     return cos_sim.mean()
@@ -128,6 +121,13 @@ def run_compat_check(
     # Load LeWM encoder
     logger.info(f"Loading LeWM from {config.lewm_checkpoint}")
     lewm = LeWMWrapper(config.lewm_checkpoint, device=str(device))
+    actual_lewm_dim = get_lewm_output_dim(lewm.encoder)
+    if actual_lewm_dim is not None and actual_lewm_dim != config.lewm_dim:
+        logger.info(
+            f"Detected LeWM embedding dim {actual_lewm_dim}; overriding configured "
+            f"lewm_dim={config.lewm_dim}."
+        )
+        config.lewm_dim = actual_lewm_dim
 
     # Projection layer to align dims (not trained here — just random init to measure raw alignment)
     projection: Optional[nn.Linear] = None
@@ -161,7 +161,7 @@ def run_compat_check(
             logger.info(f"step={steps_done:3d}  cosine_sim={running_mean:.4f}")
 
     mean_sim = sum(cosine_sims) / len(cosine_sims)
-    std_sim = float(torch.tensor(cosine_sims).std().item())
+    std_sim = 0.0 if len(cosine_sims) == 1 else float(torch.tensor(cosine_sims).std().item())
 
     logger.info(f"\n{'─'*50}")
     logger.info(f"Phase 0 result:  mean_cosine_sim={mean_sim:.4f}  std={std_sim:.4f}")

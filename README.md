@@ -2,7 +2,7 @@
 
 **JEPA world model + Hermes LLM → edge robotic agent on Jetson Orin Nano**
 
-Built on top of [VLA-JEPA](https://arxiv.org/abs/2602.10098) (Sun et al., 2026).  
+Built on top of [VLA-JEPA](https://arxiv.org/abs/2602.10098) (Sun et al., 2026).
 Novel contribution: LeWM 15M encoder + Hermes-4.3-36B QLoRA backbone + Hermes-3-8B edge distillation + TensorRT Jetson deployment.
 
 ---
@@ -52,7 +52,7 @@ Jetson Orin Nano (8GB, <50ms/step)
 
 ```bash
 # 1. Clone and install
-git clone https://github.com/youruser/hermes-jepa-edge
+git clone https://github.com/ArthurVigier/hermes-jepa-edge
 cd hermes-jepa-edge
 pip install -e ".[dev]"
 

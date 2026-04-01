@@ -18,6 +18,7 @@ import yaml
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+from src.adapters.lewm_loader import load_lewm_encoder
 from src.edge.tensorrt_export import (
     EdgeExportConfig,
     benchmark_trt_latency,
@@ -47,15 +48,12 @@ def main() -> None:
     if not args.skip_onnx and not args.bench_only:
         logger.info("Loading LeWM encoder + projection for ONNX export")
 
-        lewm_state = torch.load(config.lewm_checkpoint, map_location="cpu", weights_only=True)
-        lewm_encoder = lewm_state["encoder"]
-        lewm_encoder.eval()
+        lewm_encoder = load_lewm_encoder(config.lewm_checkpoint, device="cpu")
 
         proj_state = torch.load(config.projection_checkpoint, map_location="cpu", weights_only=True)
 
-        from src.adapters.projection import LeWMProjection
-        projection = LeWMProjection(config.lewm_dim, config.vjepa2_dim)
-        projection.load_state_dict(proj_state["projection_state"])
+        from src.adapters.projection import build_projection_from_state_dict
+        projection = build_projection_from_state_dict(proj_state["projection_state"])
         projection.eval()
 
         # ── ONNX export ───────────────────────────────────────────────────
