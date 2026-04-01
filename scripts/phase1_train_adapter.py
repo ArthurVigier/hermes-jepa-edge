@@ -11,11 +11,11 @@ import argparse
 import sys
 from pathlib import Path
 
-import torch
 import yaml
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+from src.adapters.lewm_loader import get_lewm_output_dim, load_lewm_encoder
 from src.adapters.projection import ProjectionConfig, ProjectionTrainer
 from src.utils import get_logger
 
@@ -41,7 +41,7 @@ def load_robot_dataloader(config: ProjectionConfig):
             }
 
     ds = ProjectionDataset(config)
-    return DataLoader(ds, batch_size=config.batch_size, shuffle=True, num_workers=4)
+    return DataLoader(ds, batch_size=config.batch_size, shuffle=True, num_workers=0)
 
 
 def main() -> None:
@@ -57,13 +57,15 @@ def main() -> None:
     config = ProjectionConfig(**cfg_dict)
     dataloader = load_robot_dataloader(config)
 
-    # Load LeWM encoder (adapt to your actual LeWM API)
     logger.info(f"Loading LeWM encoder from {config.lewm_checkpoint}")
-    lewm_state = torch.load(config.lewm_checkpoint, map_location="cpu", weights_only=True)
-    lewm_encoder = lewm_state.get("encoder")
-    if lewm_encoder is None:
-        logger.error("Could not find 'encoder' key in LeWM checkpoint. Check your checkpoint format.")
-        sys.exit(1)
+    lewm_encoder = load_lewm_encoder(config.lewm_checkpoint, device="cpu")
+    actual_lewm_dim = get_lewm_output_dim(lewm_encoder)
+    if actual_lewm_dim is not None and actual_lewm_dim != config.lewm_dim:
+        logger.info(
+            f"Detected LeWM embedding dim {actual_lewm_dim}; overriding configured "
+            f"lewm_dim={config.lewm_dim}."
+        )
+        config.lewm_dim = actual_lewm_dim
 
     trainer = ProjectionTrainer(config, lewm_encoder, dataloader, logger=logger)
     result = trainer.train()

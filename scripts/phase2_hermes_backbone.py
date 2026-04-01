@@ -23,9 +23,9 @@ import yaml
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+from src.adapters.lewm_loader import load_lewm_encoder
 from src.pipeline.hermes_vla import (
     HermesVLAConfig,
-    HermesVLAPredictor,
     build_hermes_vla,
     dual_loss,
     format_tool_call_prompt,
@@ -151,15 +151,11 @@ def main() -> None:
 
     # ── Load LeWM encoder + projection ───────────────────────────────────────
     logger.info(f"Loading LeWM from {config.lewm_checkpoint}")
-    lewm_state = torch.load(config.lewm_checkpoint, map_location="cpu", weights_only=True)
-    lewm_encoder = lewm_state["encoder"]
-    lewm_encoder = lewm_encoder.to(device).eval()
+    lewm_encoder = load_lewm_encoder(config.lewm_checkpoint, device=str(device))
 
-    from src.adapters.projection import LeWMProjection
+    from src.adapters.projection import build_projection_from_state_dict
     proj_state = torch.load(config.projection_checkpoint, map_location="cpu", weights_only=True)
-    projection = LeWMProjection(config.lewm_dim, config.vjepa2_dim)
-    projection.load_state_dict(proj_state["projection_state"])
-    projection = projection.to(device)
+    projection = build_projection_from_state_dict(proj_state["projection_state"]).to(device)
 
     # ── Optimizer: only LoRA adapters + predictor + projection ───────────────
     trainable_params = (
@@ -185,7 +181,8 @@ def main() -> None:
 
     # ── Training loop ────────────────────────────────────────────────────────
     n_steps = 5 if args.dry_run else config.n_steps
-    logger.info(f"\nStarting Phase 2 training — {n_steps} steps{'  [DRY RUN]' if args.dry_run else ''}")
+    dry_run_suffix = "  [DRY RUN]" if args.dry_run else ""
+    logger.info(f"\nStarting Phase 2 training — {n_steps} steps{dry_run_suffix}")
 
     hermes.train()
     predictor.train()
@@ -301,7 +298,8 @@ def main() -> None:
         logger.info(
             f"\nPhase 2 complete.\n"
             f"LoRA adapter saved → {output_dir / 'lora_final'}\n"
-            f"Next: merge LoRA → BF16 with: python scripts/phase2_merge_lora.py --config {args.config}"
+            "Next: merge LoRA → BF16 with: "
+            f"python scripts/phase2_merge_lora.py --config {args.config}"
         )
 
 

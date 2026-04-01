@@ -5,10 +5,12 @@ Unit tests for LeWM → JEPA projection layer and alignment loss.
 
 import pytest
 import torch
-import torch.nn as nn
 
-from src.adapters.projection import LeWMProjection, alignment_loss
-
+from src.adapters.projection import (
+    LeWMProjection,
+    alignment_loss,
+    build_projection_from_state_dict,
+)
 
 LEWM_DIM = 256
 VJEPA2_DIM = 1024
@@ -46,6 +48,20 @@ def test_projection_gradients_flow():
     loss.backward()
     assert x.grad is not None
     assert not torch.isnan(x.grad).any()
+
+
+def test_build_projection_from_state_dict_mlp_checkpoint():
+    original = LeWMProjection(LEWM_DIM, VJEPA2_DIM, hidden_dim=512)
+    rebuilt = build_projection_from_state_dict(original.state_dict())
+    x = torch.randn(BATCH, LEWM_DIM)
+    assert rebuilt(x).shape == (BATCH, VJEPA2_DIM)
+
+
+def test_build_projection_from_state_dict_linear_checkpoint():
+    original = LeWMProjection(LEWM_DIM, VJEPA2_DIM, hidden_dim=0)
+    rebuilt = build_projection_from_state_dict(original.state_dict())
+    x = torch.randn(BATCH, LEWM_DIM)
+    assert rebuilt(x).shape == (BATCH, VJEPA2_DIM)
 
 
 # ─── Alignment loss ───────────────────────────────────────────────────────────

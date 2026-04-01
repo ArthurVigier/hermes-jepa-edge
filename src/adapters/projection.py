@@ -17,7 +17,7 @@ from typing import Optional
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
+import torch.nn.functional as functional
 from torch.optim import AdamW
 from torch.optim.lr_scheduler import CosineAnnealingLR
 from torch.utils.data import DataLoader
@@ -30,7 +30,6 @@ from src.utils import (
     get_logger,
     seed_everything,
 )
-
 
 # ─── Config ───────────────────────────────────────────────────────────────────
 
@@ -69,7 +68,13 @@ class LeWMProjection(nn.Module):
     Set hidden_dim=0 for a single Linear layer.
     """
 
-    def __init__(self, lewm_dim: int, vjepa2_dim: int, hidden_dim: int = 512, dropout: float = 0.1) -> None:
+    def __init__(
+        self,
+        lewm_dim: int,
+        vjepa2_dim: int,
+        hidden_dim: int = 512,
+        dropout: float = 0.1,
+    ) -> None:
         super().__init__()
         if hidden_dim > 0:
             self.net = nn.Sequential(
@@ -93,6 +98,27 @@ class LeWMProjection(nn.Module):
         return self.net(x)
 
 
+def build_projection_from_state_dict(state_dict: dict[str, torch.Tensor]) -> LeWMProjection:
+    """Recreate a saved projection module without relying on config dims."""
+    if "net.weight" in state_dict:
+        input_dim = state_dict["net.weight"].shape[1]
+        output_dim = state_dict["net.weight"].shape[0]
+        projection = LeWMProjection(input_dim, output_dim, hidden_dim=0)
+    elif "net.0.weight" in state_dict and "net.4.weight" in state_dict:
+        input_dim = state_dict["net.0.weight"].shape[1]
+        hidden_dim = state_dict["net.0.weight"].shape[0]
+        output_dim = state_dict["net.4.weight"].shape[0]
+        projection = LeWMProjection(input_dim, output_dim, hidden_dim=hidden_dim)
+    else:
+        raise ValueError(
+            "Unsupported projection checkpoint format. Expected either `net.weight` "
+            "or the MLP keys `net.0.weight` and `net.4.weight`."
+        )
+
+    projection.load_state_dict(state_dict)
+    return projection
+
+
 # ─── Alignment loss ───────────────────────────────────────────────────────────
 
 def alignment_loss(
@@ -111,13 +137,13 @@ def alignment_loss(
     Returns:
         Scalar loss.
     """
-    projected_norm = F.normalize(projected, dim=-1)
-    target_norm = F.normalize(target.detach(), dim=-1)  # targets are stop-gradient
+    projected_norm = functional.normalize(projected, dim=-1)
+    target_norm = functional.normalize(target.detach(), dim=-1)  # targets are stop-gradient
 
     if mode == "l2_normalized":
-        return F.mse_loss(projected_norm, target_norm)
+        return functional.mse_loss(projected_norm, target_norm)
     elif mode == "smooth_l1":
-        return F.smooth_l1_loss(projected_norm, target_norm)
+        return functional.smooth_l1_loss(projected_norm, target_norm)
     elif mode == "cosine":
         return 1.0 - (projected_norm * target_norm).sum(dim=-1).mean()
     else:
@@ -252,8 +278,9 @@ class ProjectionTrainer:
 
             if self.step % self.cfg.log_every == 0:
                 mean_loss = sum(losses[-self.cfg.log_every:]) / self.cfg.log_every
+                lr = scheduler.get_last_lr()[0]
                 self.logger.info(
-                    f"step={self.step:5d}  loss={mean_loss:.4f}  lr={scheduler.get_last_lr()[0]:.2e}"
+                    f"step={self.step:5d}  loss={mean_loss:.4f}  lr={lr:.2e}"
                 )
                 if mean_loss < self.best_loss:
                     self.best_loss = mean_loss

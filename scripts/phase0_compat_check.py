@@ -50,7 +50,7 @@ def make_dummy_dataloader(config: CompatCheckConfig):
             }
 
     ds = RobotFrameDataset(config.dataset_name, config.lewm_dim, config.vjepa2_dim)
-    return DataLoader(ds, batch_size=config.batch_size, shuffle=False, num_workers=2)
+    return DataLoader(ds, batch_size=config.batch_size, shuffle=False, num_workers=0)
 
 
 def main() -> None:
